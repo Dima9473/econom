@@ -1,0 +1,96 @@
+//@version=6
+strategy(title='Стратегия Полосы Болинджера', overlay=false, default_qty_type=strategy.percent_of_equity, default_qty_value=100)
+
+useDateFilter = input.bool(true, title="Filter Date Range of Backtest",
+     group="Backtest Time Period")
+backtestStartDate = input.time(timestamp("1 Jan 2021"),
+     title="Start Date", group="Backtest Time Period",
+     tooltip="This start date is in the time zone of the exchange " +
+     "where the chart's instrument trades. It doesn't use the time " +
+     "zone of the chart or of your computer.")
+backtestEndDate = input.time(timestamp("1 Jan 2022"),
+     title="End Date", group="Backtest Time Period",
+     tooltip="This end date is in the time zone of the exchange " +
+     "where the chart's instrument trades. It doesn't use the time " +
+     "zone of the chart or of your computer.")
+inTradeWindow = not useDateFilter or (time >= backtestStartDate and
+     time < backtestEndDate)
+
+// ===== Bollinger Bands Parameters =====
+bb_length = input(20, title="BB Length", group="Bollinger Bands")
+bb_mult = input.float(2, title="BB Multiplier", group="Bollinger Bands", step=0.1)
+
+// ===== Entry Parameters =====
+entry_threshold = input.float(0, title="Entry Threshold (%)", group="Entry Settings", step=1.0)
+
+// ===== RSI Filter Parameters =====
+use_rsi = input(false, title="Use RSI Filter", group="RSI Filter")
+long_rsi_ok = true
+short_rsi_ok = true
+
+// ===== Volume Filter Parameters =====
+use_volume_filter = input.bool(true, title="Use Volume Filter", group="Volume Filter")
+volume_length = input.int(20, title="Volume MA Length", group="Volume Filter", minval=1)
+volume_multiplier = input.float(1.0, title="Volume Multiplier", group="Volume Filter", step=0.1, minval=0.1)
+
+// ===== Risk Management =====
+stop_loss_pct = input.float(2, title="Stop Loss (%)", group="Risk Management", step=0.1)
+take_profit_pct = input.float(3, title="Take Profit (%)", group="Risk Management", step=0.1)
+
+// ===== Calculate Bollinger Bands =====
+[middle, upper, lower] = ta.bb(close, bb_length, bb_mult)
+
+// ===== Calculate Volume Indicator =====
+volume_ma = ta.sma(volume, volume_length)
+volume_threshold = volume_ma * volume_multiplier
+volume_ok = not use_volume_filter or volume >= volume_threshold
+
+// ===== Entry Signal Generation =====
+// Long signal: close approaches or touches lower band
+long_signal = close <= lower * (1 + entry_threshold / 100) and volume_ok
+
+// Short signal: close approaches or touches upper band
+short_signal = close >= upper * (1 - entry_threshold / 100) and volume_ok
+
+// ===== Exit Calculations =====
+long_entry_price = strategy.position_avg_price
+long_stop_loss = long_entry_price * (1 - stop_loss_pct / 100)
+long_take_profit = long_entry_price * (1 + take_profit_pct / 100)
+
+short_entry_price = strategy.position_avg_price
+short_stop_loss = short_entry_price * (1 + stop_loss_pct / 100)
+short_take_profit = short_entry_price * (1 - take_profit_pct / 100)
+
+// ===== Plot Bollinger Bands =====
+plot(middle, "Middle", color=color.blue, linewidth=1)
+plot(upper, "Upper", color=color.red, linewidth=1)
+plot(lower, "Lower", color=color.green, linewidth=1)
+
+// ===== Plot Volume Indicator =====
+plot(volume, "Volume", color=color.new(color.gray, 70), style=plot.style_columns)
+plot(volume_ma, "Volume MA", color=color.new(color.orange, 0), linewidth=2)
+plot(volume_threshold, "Volume Threshold", color=color.new(color.yellow, 50), linewidth=1, style=plot.style_line)
+
+// ===== Plot Entry Signals =====
+plotshape(long_signal, "Long Signal", shape.labelup, location=location.belowbar, color=color.new(color.green, 0))
+plotshape(short_signal, "Short Signal", shape.labeldown, location=location.abovebar, color=color.new(color.red, 0))
+
+// ===== Execute Trades =====
+if long_signal and strategy.position_size == 0 and inTradeWindow
+    strategy.close_all()
+    strategy.entry("Long", strategy.long)
+
+if short_signal and strategy.position_size == 0 and inTradeWindow
+    strategy.entry("Short", strategy.short)
+    strategy.cancel_all()
+
+// ===== Exit Trades =====
+if strategy.position_size > 0 and inTradeWindow
+    strategy.exit("Exit Long", "Long", stop=long_stop_loss, limit=long_take_profit)
+
+if strategy.position_size < 0 and inTradeWindow
+    strategy.exit("Exit Short", "Short", stop=short_stop_loss, limit=short_take_profit)
+
+
+
+

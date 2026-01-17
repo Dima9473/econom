@@ -1,7 +1,6 @@
 from calculator import (
     SumCalculator,
     square_function,
-    cube_function,
     inverse_square_function,
     quadratic_linear_function,
 )

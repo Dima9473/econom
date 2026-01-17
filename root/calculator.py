@@ -58,11 +58,6 @@ def square_function(x):
     return x**2
 
 
-def cube_function(x):
-    """Функция для вычисления куба числа"""
-    return x**3
-
-
 def linear_function(x):
     """Линейная функция"""
     return 2 * x + 1
